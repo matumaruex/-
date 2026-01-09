@@ -6,12 +6,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f0fdf4">
-<title>XRP Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<title>XRP Realtime</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
 <style>
-    /* ベース設定 */
+    /* デザイン設定 */
     body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         background-color: #f0fdf4;
@@ -40,6 +41,16 @@
         position: relative;
         margin-bottom: 10px;
     }
+    .connection-status {
+        position: absolute;
+        right: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: #ccc;
+    }
+    .status-live { background-color: #2bdeb5; box-shadow: 0 0 5px #2bdeb5; }
+    .status-dead { background-color: #ff4444; }
 
     /* メインカード */
     .main-card {
@@ -67,170 +78,72 @@
         margin-right: 10px;
         font-weight: bold;
     }
-    .total-label {
-        font-size: 14px;
-        opacity: 0.9;
-    }
-    .total-amount {
-        font-size: 42px;
-        font-weight: bold;
-        margin: 10px 0;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .sub-info {
-        font-size: 12px;
-        opacity: 0.8;
-        display: flex;
-        justify-content: space-between;
-    }
-    .update-time {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        font-size: 10px;
-        opacity: 0.7;
-    }
+    .total-label { font-size: 14px; opacity: 0.9; }
+    .total-amount { font-size: 42px; font-weight: bold; margin: 10px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .sub-info { font-size: 12px; opacity: 0.8; display: flex; justify-content: space-between; }
+    .update-time { position: absolute; top: 20px; right: 20px; font-size: 10px; opacity: 0.7; }
 
-    /* タブ風メニュー */
+    /* タブ */
     .tabs {
-        display: flex;
-        justify-content: space-around;
-        background-color: white;
-        border-radius: 25px;
-        padding: 5px;
-        margin-bottom: 20px;
+        display: flex; justify-content: space-around; background-color: white;
+        border-radius: 25px; padding: 5px; margin-bottom: 20px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
-    .tab {
-        flex: 1;
-        text-align: center;
-        padding: 8px 0;
-        font-size: 13px;
-        color: #666;
-        border-radius: 20px;
-    }
-    .tab.active {
-        background: linear-gradient(90deg, #2bdeb5, #2b9dde);
-        color: white;
-        font-weight: bold;
-    }
+    .tab { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: #666; border-radius: 20px; }
+    .tab.active { background: linear-gradient(90deg, #2bdeb5, #2b9dde); color: white; font-weight: bold; }
 
     /* 詳細カード */
     .detail-card {
-        background-color: white;
-        border-radius: 15px;
-        padding: 15px;
+        background-color: white; border-radius: 15px; padding: 15px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
     .detail-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-        font-weight: bold;
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 15px; font-weight: bold;
     }
-    .currency-name {
-        display: flex;
-        align-items: center;
-    }
+    .currency-name { display: flex; align-items: center; }
     .currency-flag {
-        width: 24px;
-        height: 24px;
-        background-color: #f0f0f0;
-        border-radius: 50%;
-        margin-right: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10px;
-        font-weight: bold;
-        color: #555;
+        width: 24px; height: 24px; background-color: #f0f0f0; border-radius: 50%;
+        margin-right: 8px; display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: bold; color: #555;
     }
 
-    /* チャートエリア */
-    .chart-container {
-        position: relative;
-        height: 150px;
-        width: 100%;
-        margin-bottom: 15px;
-    }
+    /* チャート */
+    .chart-container { position: relative; height: 150px; width: 100%; margin-bottom: 15px; }
 
-    /* 損益表示部 */
+    /* 損益表示 */
     .profit-box {
-        background: linear-gradient(90deg, #10b981, #0ea5e9);
-        border-radius: 10px;
-        padding: 15px;
-        color: white;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
+        background: linear-gradient(90deg, #10b981, #0ea5e9); border-radius: 10px;
+        padding: 15px; color: white; display: flex; justify-content: space-between;
+        align-items: center; margin-bottom: 15px;
     }
-    .profit-label {
-        font-size: 12px;
-        opacity: 0.9;
-    }
-    .profit-value {
-        font-size: 22px;
-        font-weight: bold;
-        text-align: right;
-    }
-    .profit-daily {
-        font-size: 11px;
-        text-align: right;
-        opacity: 0.9;
-        margin-top: 2px;
-    }
+    .profit-label { font-size: 12px; opacity: 0.9; }
+    .profit-value { font-size: 22px; font-weight: bold; text-align: right; }
+    .profit-daily { font-size: 11px; text-align: right; opacity: 0.9; margin-top: 2px; }
 
     /* 入力エリア */
-    .input-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        font-size: 14px;
-    }
-    .input-group {
-        display: flex;
-        flex-direction: column;
-    }
-    .input-label {
-        color: #666;
-        font-size: 10px;
-        margin-bottom: 4px;
-    }
+    .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px; }
+    .input-group { display: flex; flex-direction: column; }
+    .input-label { color: #666; font-size: 10px; margin-bottom: 4px; }
     .input-field {
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 10px;
-        font-size: 16px;
-        text-align: right;
-        font-weight: bold;
-        width: 100%;
-        box-sizing: border-box;
-        background-color: #fafafa;
-        -webkit-appearance: none;
+        border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 16px;
+        text-align: right; font-weight: bold; width: 100%; box-sizing: border-box;
+        background-color: #fafafa; -webkit-appearance: none;
     }
-    .input-field:focus {
-        border-color: #2bdeb5;
-        outline: none;
-        background-color: #fff;
-    }
-    .current-rate-display {
-        text-align: right;
-        font-weight: bold;
-        padding: 10px 0;
-        color: #333;
-    }
+    .current-rate-display { text-align: right; font-weight: bold; padding: 10px 0; color: #333; }
 
 </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">Crypto Asset</div>
+    <div class="header">
+        Crypto Asset
+        <div id="statusDot" class="connection-status"></div>
+    </div>
 
     <div class="main-card">
-        <div class="update-time" id="lastUpdated">Updating...</div>
+        <div class="update-time" id="lastUpdated">Connecting...</div>
         <div class="card-title-row">
             <div class="coin-icon">₿</div>
             <div>
@@ -258,7 +171,7 @@
         <div class="detail-header">
             <div class="currency-name">
                 <div class="currency-flag">X</div>
-                XRP/円 <span style="color:#d32f2f; background:#ffebeb; padding:2px 5px; border-radius:4px; font-size:10px; margin-left:6px;">買</span>
+                XRP/JPY <span style="color:#d32f2f; background:#ffebeb; padding:2px 5px; border-radius:4px; font-size:10px; margin-left:6px;">LIVE</span>
             </div>
         </div>
 
@@ -288,7 +201,7 @@
             </div>
 
             <div class="input-group">
-                <label class="input-label">現在レート (CoinGecko)</label>
+                <label class="input-label">現在レート (Kraken)</label>
                 <div class="current-rate-display" id="currentRate">---</div>
             </div>
             
@@ -300,15 +213,11 @@
     </div>
     
     <div style="text-align:center; margin-top:20px; font-size:10px; color:#aaa;">
-        Powered by CoinGecko API
+        Data provided by Kraken WebSocket
     </div>
 </div>
 
 <script>
-    // API設定
-    const API_PRICE = 'https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=jpy';
-    const API_CHART = 'https://api.coingecko.com/api/v3/coins/ripple/market_chart?vs_currency=jpy&days=1';
-    
     // 要素取得
     const elAmount = document.getElementById('inputAmount');
     const elBuyRate = document.getElementById('inputBuyRate');
@@ -318,29 +227,27 @@
     const elDailyProfit = document.getElementById('dailyProfit');
     const elTotalProfitMain = document.getElementById('totalProfitMain');
     const elLastUpdated = document.getElementById('lastUpdated');
+    const elStatusDot = document.getElementById('statusDot');
 
     let priceChart;
     let currentPrice = 0;
+    let ws;
 
     // 初期化
     function init() {
-        initChart();
         loadSettings();
-        fetchChartHistory(); // 過去データの取得
-        fetchCurrentPrice(); // 現在価格の取得
-        
-        // 10秒ごとに現在価格のみ更新 (API制限考慮)
-        setInterval(fetchCurrentPrice, 10000);
+        initChart();
+        connectWebSocket();
     }
 
-    // チャート初期化
+    // チャート設定
     function initChart() {
         const ctx = document.getElementById('priceChart').getContext('2d');
         priceChart = new Chart(ctx, {
             type: 'line',
             data: {
                 datasets: [{
-                    label: 'XRP/JPY',
+                    label: 'XRP',
                     data: [],
                     borderColor: '#2bdeb5',
                     backgroundColor: 'rgba(43, 222, 181, 0.1)',
@@ -356,78 +263,139 @@
                 scales: {
                     x: {
                         type: 'time',
-                        time: {
-                            unit: 'hour',
-                            displayFormats: { hour: 'HH:mm' }
-                        },
+                        time: { unit: 'second' }, 
                         grid: { display: false },
-                        ticks: {
-                            maxTicksLimit: 6,
-                            font: { size: 10 }
-                        }
+                        ticks: { display: false } // 時間軸の文字は消してスッキリさせる
                     },
                     y: {
                         position: 'right',
                         grid: { color: '#f0f0f0' },
-                        ticks: { font: { size: 10 } }
+                        ticks: { 
+                            font: { size: 10 },
+                            callback: function(value) { return value.toFixed(1); } // 小数点1桁まで
+                        }
                     }
                 },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false
-                    }
-                },
-                animation: false
+                plugins: { legend: { display: false }, tooltip: { intersect: false } },
+                animation: false // 高速更新のためアニメーションOFF
             }
         });
     }
 
-    // 過去チャートデータ取得 (初回のみ実行)
-    async function fetchChartHistory() {
-        try {
-            const res = await fetch(API_CHART);
-            const data = await res.json();
+    // WebSocket接続 (Kraken Public API)
+    function connectWebSocket() {
+        // 接続切れ対策
+        if (ws) ws.close();
+
+        ws = new WebSocket('wss://ws.kraken.com');
+
+        ws.onopen = () => {
+            elStatusDot.className = 'connection-status status-live'; // 緑ランプ
+            elLastUpdated.textContent = 'Live Connected';
             
-            // データ形式変換 [timestamp, price] -> {x: time, y: price}
-            const chartData = data.prices.map(item => ({
-                x: item[0],
-                y: item[1]
-            }));
+            // XRP/JPYの購読リクエスト
+            const msg = {
+                "event": "subscribe",
+                "pair": ["XRP/JPY"],
+                "subscription": { "name": "ticker" }
+            };
+            ws.send(JSON.stringify(msg));
+        };
 
-            // チャート更新
-            priceChart.data.datasets[0].data = chartData;
-            priceChart.update();
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
 
-        } catch (e) {
-            console.error('Chart Error', e);
-        }
+            // データが配列の場合のみ処理（イベント通知などを無視）
+            if (Array.isArray(data)) {
+                // data[1]の中にティッカー情報が入っている
+                // c: [price, volume] -> Close priceを使用
+                const ticker = data[1];
+                if (ticker && ticker.c) {
+                    const priceStr = ticker.c[0];
+                    const price = parseFloat(priceStr);
+                    
+                    if (!isNaN(price)) {
+                        updatePrice(price);
+                    }
+                }
+            }
+        };
+
+        ws.onclose = () => {
+            elStatusDot.className = 'connection-status status-dead'; // 赤ランプ
+            elLastUpdated.textContent = 'Disconnected';
+            // 3秒後に再接続試行
+            setTimeout(connectWebSocket, 3000);
+        };
+
+        ws.onerror = (err) => {
+            console.error('WS Error', err);
+            ws.close();
+        };
     }
 
-    // 現在価格取得 (定期実行)
-    async function fetchCurrentPrice() {
-        try {
-            const res = await fetch(API_PRICE);
-            const data = await res.json();
-            currentPrice = data.ripple.jpy;
-            
-            calculate();
-            
-            // チャートの末尾に現在価格を追加してリアルタイム感を出す
-            const now = new Date().getTime();
-            if(priceChart) {
-                priceChart.data.datasets[0].data.push({ x: now, y: currentPrice });
-                // 古すぎるデータ削除（任意：例えば24時間以上前など）
-                // 簡易的にそのまま追加のみ
-                priceChart.update('none'); // アニメーションなしで更新
-            }
+    // 価格更新処理
+    function updatePrice(price) {
+        currentPrice = price;
+        calculate();
 
-        } catch (e) {
-            console.error('Price Error', e);
+        // チャート更新
+        const now = new Date().getTime();
+        priceChart.data.datasets[0].data.push({ x: now, y: price });
+
+        // データが多すぎたら削除（直近100件）
+        if (priceChart.data.datasets[0].data.length > 100) {
+            priceChart.data.datasets[0].data.shift();
         }
+        priceChart.update('none'); // アニメなし描画
+        
+        // 更新時刻表示（秒まで動かす）
+        const d = new Date();
+        const timeStr = d.getHours().toString().padStart(2,'0') + ':' + 
+                        d.getMinutes().toString().padStart(2,'0') + ':' + 
+                        d.getSeconds().toString().padStart(2,'0');
+        elLastUpdated.textContent = 'Updated ' + timeStr;
     }
 
     function loadSettings() {
-        const sA = localStorage.
+        const sA = localStorage.getItem('xrp_amount');
+        const sR = localStorage.getItem('xrp_buy_rate');
+        if(sA) elAmount.value = sA;
+        if(sR) elBuyRate.value = sR;
+    }
+    
+    function saveSettings() {
+        localStorage.setItem('xrp_amount', elAmount.value);
+        localStorage.setItem('xrp_buy_rate', elBuyRate.value);
+        calculate();
+    }
+
+    function calculate() {
+        const amount = parseFloat(elAmount.value) || 0;
+        const buyRate = parseFloat(elBuyRate.value) || 0;
+        
+        if (currentPrice === 0) return;
+
+        const val = currentPrice * amount;
+        const profit = (currentPrice - buyRate) * amount;
+        
+        elCurrentRate.textContent = currentPrice.toLocaleString(undefined, {minimumFractionDigits: 1}) + ' 円';
+        elCurrentValue.textContent = Math.floor(val).toLocaleString() + ' 円';
+        
+        const pText = Math.floor(profit).toLocaleString() + ' 円';
+        const sign = profit >= 0 ? '+' : '';
+        
+        elTotalProfitMain.textContent = sign + pText;
+        elDetailProfit.textContent = sign + pText;
+        elDailyProfit.textContent = `当日 ${sign}${pText}`;
+    }
+
+    elAmount.addEventListener('input', saveSettings);
+    elBuyRate.addEventListener('input', saveSettings);
+
+    init();
+
+</script>
+</body>
+</html>
 
