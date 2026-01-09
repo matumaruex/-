@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#f0fdf4">
 <title>XRP Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
 <style>
     /* ベース設定 */
@@ -146,6 +147,14 @@
         color: #555;
     }
 
+    /* チャートエリア */
+    .chart-container {
+        position: relative;
+        height: 150px;
+        width: 100%;
+        margin-bottom: 15px;
+    }
+
     /* 損益表示部 */
     .profit-box {
         background: linear-gradient(90deg, #10b981, #0ea5e9);
@@ -213,22 +222,12 @@
         color: #333;
     }
 
-    /* チャートエリア */
-    .chart-container {
-        position: relative;
-        height: 120px; /* チャートの高さ */
-        width: 100%;
-        margin-bottom: 15px;
-    }
-
 </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        Crypto Asset
-    </div>
+    <div class="header">Crypto Asset</div>
 
     <div class="main-card">
         <div class="update-time" id="lastUpdated">Updating...</div>
@@ -306,8 +305,11 @@
 </div>
 
 <script>
-    const COINGECKO_API = 'https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=jpy';
+    // API設定
+    const API_PRICE = 'https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=jpy';
+    const API_CHART = 'https://api.coingecko.com/api/v3/coins/ripple/market_chart?vs_currency=jpy&days=1';
     
+    // 要素取得
     const elAmount = document.getElementById('inputAmount');
     const elBuyRate = document.getElementById('inputBuyRate');
     const elCurrentRate = document.getElementById('currentRate');
@@ -317,136 +319,115 @@
     const elTotalProfitMain = document.getElementById('totalProfitMain');
     const elLastUpdated = document.getElementById('lastUpdated');
 
-    // チャート設定
     let priceChart;
-    const ctx = document.getElementById('priceChart').getContext('2d');
-    
-    // チャートの初期化関数
+    let currentPrice = 0;
+
+    // 初期化
+    function init() {
+        initChart();
+        loadSettings();
+        fetchChartHistory(); // 過去データの取得
+        fetchCurrentPrice(); // 現在価格の取得
+        
+        // 10秒ごとに現在価格のみ更新 (API制限考慮)
+        setInterval(fetchCurrentPrice, 10000);
+    }
+
+    // チャート初期化
     function initChart() {
+        const ctx = document.getElementById('priceChart').getContext('2d');
         priceChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: [], // 時間
                 datasets: [{
-                    label: 'XRP Price',
-                    data: [], // 価格データ
-                    borderColor: '#2bdeb5', // 線の色（GMO緑）
-                    backgroundColor: 'rgba(43, 222, 181, 0.1)', // 塗りつぶしの色
+                    label: 'XRP/JPY',
+                    data: [],
+                    borderColor: '#2bdeb5',
+                    backgroundColor: 'rgba(43, 222, 181, 0.1)',
                     borderWidth: 2,
-                    pointRadius: 0, // 点を消して線だけにする
-                    pointHoverRadius: 4,
+                    pointRadius: 0,
                     fill: true,
-                    tension: 0.1 // 線の滑らかさ
+                    tension: 0.1
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }, // 凡例非表示
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                    }
-                },
                 scales: {
                     x: {
-                        display: false // X軸（時間）非表示
+                        type: 'time',
+                        time: {
+                            unit: 'hour',
+                            displayFormats: { hour: 'HH:mm' }
+                        },
+                        grid: { display: false },
+                        ticks: {
+                            maxTicksLimit: 6,
+                            font: { size: 10 }
+                        }
                     },
                     y: {
-                        display: true, // Y軸表示
-                        position: 'right', // 右側に配置
-                        grid: {
-                            display: false
-                        }
+                        position: 'right',
+                        grid: { color: '#f0f0f0' },
+                        ticks: { font: { size: 10 } }
                     }
                 },
-                animation: {
-                    duration: 1000 // アニメーション速度
-                }
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                animation: false
             }
         });
     }
 
-    function loadSettings() {
-        const savedAmount = localStorage.getItem('xrp_amount');
-        const savedRate = localStorage.getItem('xrp_buy_rate');
-        if(savedAmount) elAmount.value = savedAmount;
-        if(savedRate) elBuyRate.value = savedRate;
-    }
-    
-    function saveSettings() {
-        localStorage.setItem('xrp_amount', elAmount.value);
-        localStorage.setItem('xrp_buy_rate', elBuyRate.value);
-        calculate();
-    }
-
-    let currentPrice = 0;
-
-    async function fetchPrice() {
+    // 過去チャートデータ取得 (初回のみ実行)
+    async function fetchChartHistory() {
         try {
-            const response = await fetch(COINGECKO_API);
-            const data = await response.json();
+            const res = await fetch(API_CHART);
+            const data = await res.json();
+            
+            // データ形式変換 [timestamp, price] -> {x: time, y: price}
+            const chartData = data.prices.map(item => ({
+                x: item[0],
+                y: item[1]
+            }));
+
+            // チャート更新
+            priceChart.data.datasets[0].data = chartData;
+            priceChart.update();
+
+        } catch (e) {
+            console.error('Chart Error', e);
+        }
+    }
+
+    // 現在価格取得 (定期実行)
+    async function fetchCurrentPrice() {
+        try {
+            const res = await fetch(API_PRICE);
+            const data = await res.json();
             currentPrice = data.ripple.jpy;
             
             calculate();
-            updateChart(currentPrice); // チャート更新
             
-        } catch (error) {
-            console.error('API Error', error);
+            // チャートの末尾に現在価格を追加してリアルタイム感を出す
+            const now = new Date().getTime();
+            if(priceChart) {
+                priceChart.data.datasets[0].data.push({ x: now, y: currentPrice });
+                // 古すぎるデータ削除（任意：例えば24時間以上前など）
+                // 簡易的にそのまま追加のみ
+                priceChart.update('none'); // アニメーションなしで更新
+            }
+
+        } catch (e) {
+            console.error('Price Error', e);
         }
     }
 
-    function calculate() {
-        const amount = parseFloat(elAmount.value) || 0;
-        const buyRate = parseFloat(elBuyRate.value) || 0;
-        
-        if (currentPrice === 0) return;
+    function loadSettings() {
+        const sA = localStorage.
 
-        const currentValue = currentPrice * amount;
-        const profit = (currentPrice - buyRate) * amount;
-        
-        elCurrentRate.textContent = currentPrice.toLocaleString() + ' 円';
-        elCurrentValue.textContent = Math.floor(currentValue).toLocaleString() + ' 円';
-        
-        const profitText = Math.floor(profit).toLocaleString() + ' 円';
-        const profitSign = profit >= 0 ? '+' : '';
-        
-        elTotalProfitMain.textContent = profitSign + profitText;
-        elDetailProfit.textContent = profitSign + profitText;
-        elDailyProfit.textContent = `当日 ${profitSign}${profitText}`;
-
-        const now = new Date();
-        const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-        elLastUpdated.textContent = 'Updated ' + timeStr;
-    }
-
-    function updateChart(price) {
-        if (!priceChart) return;
-
-        const now = new Date();
-        const timeLabel = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
-
-        // データを追加
-        priceChart.data.labels.push(timeLabel);
-        priceChart.data.datasets[0].data.push(price);
-
-        // データが増えすぎたら左側を削除（例: 50点まで保持）
-        if (priceChart.data.labels.length > 50) {
-            priceChart.data.labels.shift();
-            priceChart.data.datasets[0].data.shift();
-        }
-
-        priceChart.update();
-    }
-
-    elAmount.addEventListener('input', saveSettings);
-    elBuyRate.addEventListener('input', saveSettings);
-
-    initChart(); // チャート準備
-    loadSettings();
-    fetchPrice();
-    setInterval(fetchPrice, 30000); // 30秒更新
-</script>
-</body>
-</html>
