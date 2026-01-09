@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f0fdf4">
-<title>XRP Realtime</title>
+<title>XRP Realtime v3</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -50,6 +50,7 @@
         background-color: #ccc;
     }
     .status-live { background-color: #2bdeb5; box-shadow: 0 0 5px #2bdeb5; }
+    .status-http { background-color: #f0ad4e; } /* 初期ロード時の色 */
     .status-dead { background-color: #ff4444; }
 
     /* メインカード */
@@ -131,6 +132,9 @@
         background-color: #fafafa; -webkit-appearance: none;
     }
     .current-rate-display { text-align: right; font-weight: bold; padding: 10px 0; color: #333; }
+    
+    /* デバッグ用（万が一動かない時用） */
+    .debug-msg { font-size: 9px; color: #ccc; text-align: center; margin-top: 10px; overflow: hidden; white-space: nowrap; }
 
 </style>
 </head>
@@ -143,7 +147,7 @@
     </div>
 
     <div class="main-card">
-        <div class="update-time" id="lastUpdated">Connecting...</div>
+        <div class="update-time" id="lastUpdated">Loading...</div>
         <div class="card-title-row">
             <div class="coin-icon">₿</div>
             <div>
@@ -202,200 +206,4 @@
 
             <div class="input-group">
                 <label class="input-label">現在レート (Kraken)</label>
-                <div class="current-rate-display" id="currentRate">---</div>
-            </div>
-            
-            <div class="input-group">
-                <label class="input-label">評価額</label>
-                <div class="current-rate-display" id="currentValue">---</div>
-            </div>
-        </div>
-    </div>
-    
-    <div style="text-align:center; margin-top:20px; font-size:10px; color:#aaa;">
-        Data provided by Kraken WebSocket
-    </div>
-</div>
-
-<script>
-    // 要素取得
-    const elAmount = document.getElementById('inputAmount');
-    const elBuyRate = document.getElementById('inputBuyRate');
-    const elCurrentRate = document.getElementById('currentRate');
-    const elCurrentValue = document.getElementById('currentValue');
-    const elDetailProfit = document.getElementById('detailProfit');
-    const elDailyProfit = document.getElementById('dailyProfit');
-    const elTotalProfitMain = document.getElementById('totalProfitMain');
-    const elLastUpdated = document.getElementById('lastUpdated');
-    const elStatusDot = document.getElementById('statusDot');
-
-    let priceChart;
-    let currentPrice = 0;
-    let ws;
-
-    // 初期化
-    function init() {
-        loadSettings();
-        initChart();
-        connectWebSocket();
-    }
-
-    // チャート設定
-    function initChart() {
-        const ctx = document.getElementById('priceChart').getContext('2d');
-        priceChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                datasets: [{
-                    label: 'XRP',
-                    data: [],
-                    borderColor: '#2bdeb5',
-                    backgroundColor: 'rgba(43, 222, 181, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: true,
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: { unit: 'second' }, 
-                        grid: { display: false },
-                        ticks: { display: false } // 時間軸の文字は消してスッキリさせる
-                    },
-                    y: {
-                        position: 'right',
-                        grid: { color: '#f0f0f0' },
-                        ticks: { 
-                            font: { size: 10 },
-                            callback: function(value) { return value.toFixed(1); } // 小数点1桁まで
-                        }
-                    }
-                },
-                plugins: { legend: { display: false }, tooltip: { intersect: false } },
-                animation: false // 高速更新のためアニメーションOFF
-            }
-        });
-    }
-
-    // WebSocket接続 (Kraken Public API)
-    function connectWebSocket() {
-        // 接続切れ対策
-        if (ws) ws.close();
-
-        ws = new WebSocket('wss://ws.kraken.com');
-
-        ws.onopen = () => {
-            elStatusDot.className = 'connection-status status-live'; // 緑ランプ
-            elLastUpdated.textContent = 'Live Connected';
-            
-            // XRP/JPYの購読リクエスト
-            const msg = {
-                "event": "subscribe",
-                "pair": ["XRP/JPY"],
-                "subscription": { "name": "ticker" }
-            };
-            ws.send(JSON.stringify(msg));
-        };
-
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-
-            // データが配列の場合のみ処理（イベント通知などを無視）
-            if (Array.isArray(data)) {
-                // data[1]の中にティッカー情報が入っている
-                // c: [price, volume] -> Close priceを使用
-                const ticker = data[1];
-                if (ticker && ticker.c) {
-                    const priceStr = ticker.c[0];
-                    const price = parseFloat(priceStr);
-                    
-                    if (!isNaN(price)) {
-                        updatePrice(price);
-                    }
-                }
-            }
-        };
-
-        ws.onclose = () => {
-            elStatusDot.className = 'connection-status status-dead'; // 赤ランプ
-            elLastUpdated.textContent = 'Disconnected';
-            // 3秒後に再接続試行
-            setTimeout(connectWebSocket, 3000);
-        };
-
-        ws.onerror = (err) => {
-            console.error('WS Error', err);
-            ws.close();
-        };
-    }
-
-    // 価格更新処理
-    function updatePrice(price) {
-        currentPrice = price;
-        calculate();
-
-        // チャート更新
-        const now = new Date().getTime();
-        priceChart.data.datasets[0].data.push({ x: now, y: price });
-
-        // データが多すぎたら削除（直近100件）
-        if (priceChart.data.datasets[0].data.length > 100) {
-            priceChart.data.datasets[0].data.shift();
-        }
-        priceChart.update('none'); // アニメなし描画
-        
-        // 更新時刻表示（秒まで動かす）
-        const d = new Date();
-        const timeStr = d.getHours().toString().padStart(2,'0') + ':' + 
-                        d.getMinutes().toString().padStart(2,'0') + ':' + 
-                        d.getSeconds().toString().padStart(2,'0');
-        elLastUpdated.textContent = 'Updated ' + timeStr;
-    }
-
-    function loadSettings() {
-        const sA = localStorage.getItem('xrp_amount');
-        const sR = localStorage.getItem('xrp_buy_rate');
-        if(sA) elAmount.value = sA;
-        if(sR) elBuyRate.value = sR;
-    }
-    
-    function saveSettings() {
-        localStorage.setItem('xrp_amount', elAmount.value);
-        localStorage.setItem('xrp_buy_rate', elBuyRate.value);
-        calculate();
-    }
-
-    function calculate() {
-        const amount = parseFloat(elAmount.value) || 0;
-        const buyRate = parseFloat(elBuyRate.value) || 0;
-        
-        if (currentPrice === 0) return;
-
-        const val = currentPrice * amount;
-        const profit = (currentPrice - buyRate) * amount;
-        
-        elCurrentRate.textContent = currentPrice.toLocaleString(undefined, {minimumFractionDigits: 1}) + ' 円';
-        elCurrentValue.textContent = Math.floor(val).toLocaleString() + ' 円';
-        
-        const pText = Math.floor(profit).toLocaleString() + ' 円';
-        const sign = profit >= 0 ? '+' : '';
-        
-        elTotalProfitMain.textContent = sign + pText;
-        elDetailProfit.textContent = sign + pText;
-        elDailyProfit.textContent = `当日 ${sign}${pText}`;
-    }
-
-    elAmount.addEventListener('input', saveSettings);
-    elBuyRate.addEventListener('input', saveSettings);
-
-    init();
-
-</script>
-</body>
-</html>
-
+                <div class="current-rate-display" id="currentRate">---
